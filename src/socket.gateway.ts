@@ -1,5 +1,4 @@
 
-
 import { Logger } from '@nestjs/common';
 import {
   OnGatewayInit,
@@ -20,6 +19,7 @@ interface MessagePayload {
 interface InfoPayload {
   event: string;
   totalClients: number;
+  clients:string[];
 }
 
 @WebSocketGateway({ transports: ['websocket'], secure: false })
@@ -45,11 +45,19 @@ export class SocketGateway implements OnGatewayInit {
     this.clients.set(clientId, client);
     console.log('clientID', clientId);
 
-    const infoMsg: InfoPayload = {
-      event: 'info',
-      totalClients: this.summaryClient,
-    };
-    this.emitMessage(infoMsg);
+    client.on('message', (data) => {
+      try {
+        const payload = JSON.parse(data.toString());
+        if (payload.event === 'register' && payload.name) {
+          (client as any).name = payload.name; // Ismni saqlash
+          this.updateClientsInfo();
+        }
+      } catch (error) {
+        this.logger.error('Error parsing register event');
+      }
+    });
+  
+    this.updateClientsInfo();
   }
 
   handleDisconnect(client: WebSocket) {
@@ -62,6 +70,8 @@ export class SocketGateway implements OnGatewayInit {
     const infoMsg: InfoPayload = {
       event: 'info',
       totalClients: this.summaryClient,
+      clients: Array.from(this.clients.values()).map((client) => client.name || clientId),
+
     };
     this.emitMessage(infoMsg);
   }
@@ -84,7 +94,7 @@ export class SocketGateway implements OnGatewayInit {
 
     const text = payload.text || (payload.data && payload.data.text) || payload.data;
     const to = payload.to || (payload.data && payload.data.to);
-    const from = (client as any).id; // Senderning ID sini olamiz
+    const from = payload.data?.from || payload.from || (client as any).id;
 
     if (!text) {
       this.logger.error('Invalid payload: missing text or data');
@@ -99,16 +109,22 @@ export class SocketGateway implements OnGatewayInit {
         event: 'message',
         text,
         to,
-        from,
+    
       };
 
     
       this.sendMessageToClient(to, message);
       this.sendMessageToClient(from, message);
     } else {
+
+    const groupMsg: MessagePayload = { 
+      event: 'message', 
+      text, 
+      from // Jo‘natuvchini qo‘shamiz
+    };
       // Group chat
       this.logger.verbose(`GROUP MESSAGE: ${text}`);
-      const groupMsg: MessagePayload = { event: 'message', text };
+      console.log('groupMSG', groupMsg);
       this.emitMessage(groupMsg);
     }
   }
@@ -124,13 +140,25 @@ export class SocketGateway implements OnGatewayInit {
   private sendMessageToClient(clientId: string, message: any) {
     const targetClient = this.clients.get(clientId);
     if (targetClient && targetClient.readyState === WebSocket.OPEN) {
+      message.from = (targetClient as any).name || clientId; // Ismni qo‘shish
       targetClient.send(JSON.stringify(message));
     } else {
       this.logger.warn(`Client with ID ${clientId} not found or disconnected`);
     }
   }
+  
 
   private generateUniqueId(): string {
     return Math.random().toString(36).slice(2, 9);
   }
+  private updateClientsInfo() {
+    const infoMsg: InfoPayload = {
+      event: 'info',
+      totalClients: this.summaryClient,
+      clients: Array.from(this.clients.values()).map((client) => (client as any).name || (client as any).id),
+    };
+    this.emitMessage(infoMsg);
+  }
 }
+
+  
