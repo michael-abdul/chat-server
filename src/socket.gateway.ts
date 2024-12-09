@@ -43,17 +43,22 @@ export class SocketGateway implements OnGatewayInit {
     const clientId = this.generateUniqueId();
     (client as any).id = clientId;
     this.clients.set(clientId, client);
-    console.log('clientID', clientId);
+    this.logger.verbose(`Client Registered: Name [${(client as any).name}], ID [${(client as any).id}]`);
 
     client.on('message', (data) => {
       try {
         const payload = JSON.parse(data.toString());
+        console.log('Register payload received:', payload);
+    
         if (payload.event === 'register' && payload.name) {
-          (client as any).name = payload.name; // Ismni saqlash
+          (client as any).name = payload.name.trim(); // Ismni saqlash
+          this.logger.verbose(`Client Registered: Name [${(client as any).name}], ID [${(client as any).id}]`);
           this.updateClientsInfo();
+        } else {
+          this.logger.warn('Invalid register event received', payload);
         }
       } catch (error) {
-        this.logger.error('Error parsing register event');
+        this.logger.error('Error parsing register event', error);
       }
     });
   
@@ -81,6 +86,7 @@ export class SocketGateway implements OnGatewayInit {
     try {
       if (typeof payload === 'string') {
         payload = JSON.parse(payload);
+        console.log('Received message payload:', JSON.stringify(payload, null, 2));
       }
     } catch (error) {
       this.logger.error('Invalid payload: Payload is not a valid JSON string');
@@ -90,6 +96,7 @@ export class SocketGateway implements OnGatewayInit {
     if (!payload || typeof payload !== 'object') {
       this.logger.error('Invalid payload: Payload is not an object or missing');
       return;
+    
     }
 
     const text = payload.text || (payload.data && payload.data.text) || payload.data;
@@ -97,7 +104,7 @@ export class SocketGateway implements OnGatewayInit {
     const from = payload.data?.from || payload.from || (client as any).id;
 
     if (!text) {
-      this.logger.error('Invalid payload: missing text or data');
+      this.logger.error('Invalid payload: Missing text, to, or from fields');
       return;
     }
 
@@ -111,7 +118,10 @@ export class SocketGateway implements OnGatewayInit {
         to,
     
       };
-
+      const toClient = this.clients.get(to);
+      if (!toClient) {
+        this.logger.warn(`Client with ID ${to} not found or disconnected`);
+      }
     
       this.sendMessageToClient(to, message);
       this.sendMessageToClient(from, message);
@@ -136,14 +146,42 @@ export class SocketGateway implements OnGatewayInit {
       }
     });
   }
-
   private sendMessageToClient(clientId: string, message: any) {
-    const targetClient = this.clients.get(clientId);
+    const targetClient = this.findClientByName(clientId);
+  
     if (targetClient && targetClient.readyState === WebSocket.OPEN) {
-      message.from = (targetClient as any).name || clientId; // Ismni qo‘shish
-      targetClient.send(JSON.stringify(message));
+      try {
+        console.log(
+          `Target client found: ID [${(targetClient as any).id}] Name [${(targetClient as any).name}]`
+        );
+        message.from = (targetClient as any).name || (targetClient as any).id;
+  
+        // Xabarni yuborish
+        targetClient.send(JSON.stringify(message), (error) => {
+          if (error) {
+            this.logger.error(
+              `Failed to deliver message to Client ID [${clientId}]: ${error.message}`
+            );
+          } else {
+            this.logger.verbose(
+              `Message successfully delivered to Client ID [${clientId}], Name [${(targetClient as any).name}]`
+            );
+          }
+        });
+      } catch (error) {
+        this.logger.error(
+          `Error occurred while sending message to Client ID [${clientId}]: ${error.message}`
+        );
+      }
     } else {
       this.logger.warn(`Client with ID ${clientId} not found or disconnected`);
+      console.log(
+        'Available clients:',
+        Array.from(this.clients.entries()).map(([id, client]) => ({
+          id,
+          name: (client as any).name,
+        }))
+      );
     }
   }
   
@@ -157,8 +195,18 @@ export class SocketGateway implements OnGatewayInit {
       totalClients: this.summaryClient,
       clients: Array.from(this.clients.values()).map((client) => (client as any).name || (client as any).id),
     };
+    console.log('Updated clients list:', infoMsg.clients); // Log qo'shildi
     this.emitMessage(infoMsg);
   }
+  private findClientByName(name: string): WebSocket | undefined {
+    for (const client of this.clients.values()) {
+      if ((client as any).name === name) {
+        return client;
+      }
+    }
+    return undefined;
+  }
+  
 }
 
   
