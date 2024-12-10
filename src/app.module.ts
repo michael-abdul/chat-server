@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { User } from './user/entities/user.entity';
 import { Logger } from '@nestjs/common';
+import { AppController } from './app.controller';
 
 const logger = new Logger('DatabaseConnection');
 @Module({
@@ -27,6 +28,7 @@ const logger = new Logger('DatabaseConnection');
     }),
     UserModule,
   ],
+	controllers: [AppController],
   providers: [SocketGateway],
 })
 export class AppModule {}
