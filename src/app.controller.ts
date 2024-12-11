@@ -2,20 +2,28 @@ import {
   Controller,
   Post,
   UseInterceptors,
-  UploadedFile,
   UploadedFiles,
   Logger,
+  Req,
 } from '@nestjs/common';
 import { getMulterUploader } from './uploader';
-import {  FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { Request } from 'express';
 
 @Controller('upload')
 export class AppController {
   private readonly logger = new Logger(AppController.name);
 
   @Post('file')
-  @UseInterceptors(FilesInterceptor('files',10, getMulterUploader('files')))
-  uploadFiles(@UploadedFiles() files: Express.Multer.File[]) {
+  @UseInterceptors(FilesInterceptor('files', 10, getMulterUploader('files')))
+  uploadFiles(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Req() req: Request,
+  ) {
+    // Log kiruvchi so'rov ma'lumotlari
+    this.logger.log(`Request Headers: ${JSON.stringify(req.headers)}`);
+    this.logger.log(`Request Body: ${JSON.stringify(req.body)}`);
+
     if (!files || files.length === 0) {
       throw new Error('No files uploaded');
     }
@@ -38,4 +46,3 @@ export class AppController {
     };
   }
 }
-
