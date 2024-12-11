@@ -15,10 +15,11 @@ export function getMulterUploader(address: string): Options {
         cb(null, uploadPath); // Fayllarni saqlash manzili
       },
       filename: function (req, file, cb) {
+        const originalName = path.parse(file.originalname).name; // Fayl nomining asosiy qismini olish
         const extension = path.extname(file.originalname);
-        const uniqueName = `${uuidv4()}${extension}`;
+        const uniqueName = `${originalName}${extension}`;
         logger.log(
-          `Generated unique file name: ${uniqueName} for original file: ${file.originalname}`,
+          `Generated unique file name: ${extension} for original file: ${file.originalname}`,
         ); // Log yozish
         cb(null, uniqueName); // Fayl nomi uchun noyob nom
       },

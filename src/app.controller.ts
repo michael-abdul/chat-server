@@ -5,11 +5,15 @@ import {
   UploadedFiles,
   Logger,
   Req,
+  Get,
+  Param,
+  Res,
 } from '@nestjs/common';
 import { getMulterUploader } from './uploader';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { Request } from 'express';
-
+import { Request, Response } from 'express';
+import * as path from 'path';
+import * as fs from 'fs'; 
 @Controller('upload')
 export class AppController {
   private readonly logger = new Logger(AppController.name);
@@ -31,8 +35,8 @@ export class AppController {
     // Yuklangan fayllar haqida ma'lumotlarni qaytarish
     const uploadedFiles = files.map((file) => {
       const fileInfo = {
-        fileName: file.filename,
-        fileUrl: `/uploads/files/${file.filename}`,
+        fileName: file.originalname,
+        fileUrl: `/uploads/files/${file.originalname}`,
       };
 
       // Fayl logini chiqarish
@@ -44,5 +48,18 @@ export class AppController {
       message: 'Files uploaded successfully',
       files: uploadedFiles,
     };
+  }
+
+  @Get('files/:fileName')
+  getFile(@Param('fileName') fileName: string, @Res() res: Response) {
+    const filePath = path.join(process.cwd(), 'uploads/files', fileName);
+    console.log('filePath:', filePath);
+    console.log('File exists:', fs.existsSync(filePath));
+    if (!fs.existsSync(filePath)) {
+      res.status(404).send('File not found');
+      return;
+    }
+
+    res.sendFile(filePath);
   }
 }
