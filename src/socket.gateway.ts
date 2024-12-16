@@ -5,6 +5,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
+import axios from 'axios';
 import { Server } from 'ws';
 import * as WebSocket from 'ws';
 
@@ -28,6 +29,21 @@ export class SocketGateway implements OnGatewayInit {
   private logger: Logger = new Logger('SocketEventsGateway');
   private summaryClient: number = 0;
 
+  private slackWebhookUrl: string =
+  'https://hooks.slack.com/services/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';
+
+private async sendMessageToSlack(text: string) {
+  try {
+    const message = {
+      text: text,
+    };
+
+    await axios.post(this.slackWebhookUrl, message);
+    this.logger.verbose(`Slack xabar yuborildi: ${text}`);
+  } catch (error) {
+    this.logger.error('Slack xabar yuborishda xatolik yuz berdi', error);
+  }
+}
   @WebSocketServer()
   server: Server;
 
@@ -104,6 +120,8 @@ export class SocketGateway implements OnGatewayInit {
     this.logger.verbose(`1:1 MESSAGE from ${from} to ${to}: ${text}`);
     this.sendMessageToClient(to, privateMessage);
     this.sendMessageToClient(from, privateMessage);
+   const slackMessage = `새로운 그룹 메시지:\n\n보낸 사람: ${from}\n내용: ${text}`
+  await this.sendMessageToSlack(slackMessage);
   }
 
   @SubscribeMessage('groupmessage')
@@ -123,12 +141,16 @@ export class SocketGateway implements OnGatewayInit {
       event: 'groupmessage',
       text,
       from,
-      fileName: fileName || null, // Fayl ma'lumotlarini qo'shish
+      fileName: fileName || null, 
       fileUrl: fileUrl || null,
     };
 
     this.logger.verbose(`GROUP MESSAGE from ${from}: ${text}`);
     this.emitMessage(groupMessage);
+
+  
+ const slackMessage = `새로운 그룹 메시지:\n\n보낸 사람: ${from}\n내용: ${text}`
+  await this.sendMessageToSlack(slackMessage);
   }
 
   private emitMessage(message: InfoPayload | MessagePayload) {
